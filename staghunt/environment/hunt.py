@@ -256,6 +256,58 @@ class StagHuntEnv(ParallelEnv):
             text_rect = text.get_rect(center=center)
             self.screen.blit(text, text_rect)
 
+        # Draw communication lines
+        comm_stag_color = (255, 255, 0)  # Yellow for stag communication
+        comm_hare_color = (0, 255, 255)  # Cyan for hare communication
+        line_thickness = 2
+
+        for sender_idx, sender_agent_name in enumerate(self.agents):
+            # self._comm_messages stores (recipient_idx, target_type_internal)
+            # target_type_internal: -1 (no comm), 0 (stag), 1 (hare)
+            sender_comm_recipient_idx, sender_comm_target_internal = self._comm_messages[sender_agent_name]
+
+            line_color = None
+            if sender_comm_target_internal == 0:  # Stag communicated
+                line_color = comm_stag_color
+            elif sender_comm_target_internal == 1:  # Hare communicated
+                line_color = comm_hare_color
+
+            if line_color is None:  # No communication from this agent
+                continue
+
+            sender_x_grid, sender_y_grid = self.agent_positions[sender_agent_name]
+            sender_center_screen = (
+                sender_y_grid * CELL_SIZE + CELL_SIZE // 2,
+                sender_x_grid * CELL_SIZE + CELL_SIZE // 2,
+            )
+
+            if sender_comm_recipient_idx == self.num_players:  # Broadcast
+                for receiver_idx, receiver_agent_name in enumerate(self.agents):
+                    if sender_idx == receiver_idx:  # Don't draw line to self for broadcast
+                        continue
+
+                    receiver_x_grid, receiver_y_grid = self.agent_positions[receiver_agent_name]
+                    receiver_center_screen = (
+                        receiver_y_grid * CELL_SIZE + CELL_SIZE // 2,
+                        receiver_x_grid * CELL_SIZE + CELL_SIZE // 2,
+                    )
+                    pygame.draw.line(
+                        self.screen, line_color, sender_center_screen, receiver_center_screen, line_thickness
+                    )
+
+            elif (
+                isinstance(sender_comm_recipient_idx, int) and 0 <= sender_comm_recipient_idx < self.num_players
+            ):  # Specific agent
+                if sender_comm_recipient_idx == sender_idx:  # Communicating to self, skip drawing
+                    continue
+                receiver_agent_name = self.agents[sender_comm_recipient_idx]
+                receiver_x_grid, receiver_y_grid = self.agent_positions[receiver_agent_name]
+                receiver_center_screen = (
+                    receiver_y_grid * CELL_SIZE + CELL_SIZE // 2,
+                    receiver_x_grid * CELL_SIZE + CELL_SIZE // 2,
+                )
+                pygame.draw.line(self.screen, line_color, sender_center_screen, receiver_center_screen, line_thickness)
+
         # Render additional info such as stag capture power below the grid (starting with capture power).
         info_text = f"Stag Capture Power: {self.stag_capture_power}"
         info_surface = self.font.render(info_text, True, (0, 0, 0))
@@ -278,7 +330,7 @@ if __name__ == "__main__":
     env.render()
 
     # Run 10 steps; for demonstration, actions are randomly selected.
-    for _ in range(10):
+    for _ in range(20):
         actions = {}
         for agent in env.agents:
             # Randomly sample movement action.
